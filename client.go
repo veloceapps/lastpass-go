@@ -191,7 +191,7 @@ func (c *Client) Session() (*Session, error) {
 
 // Logout invalidates the session cookie.
 func (c *Client) Logout(ctx context.Context) error {
-	loggedIn, err := c.loggedIn(ctx)
+	loggedIn, err := c.LoggedIn(ctx)
 	if err != nil {
 		return err
 	}
@@ -257,7 +257,7 @@ func (c *Client) Update(ctx context.Context, account *Account) error {
 //
 // All Account fields other than account.ID and account.Share are ignored.
 func (c *Client) Delete(ctx context.Context, account *Account) error {
-	loggedIn, err := c.loggedIn(ctx)
+	loggedIn, err := c.LoggedIn(ctx)
 	if err != nil {
 		return err
 	}
@@ -319,7 +319,7 @@ func (c *Client) upsert(ctx context.Context, acct *Account) (result, error) {
 		Result result `xml:"result"`
 	}
 
-	loggedIn, err := c.loggedIn(ctx)
+	loggedIn, err := c.LoggedIn(ctx)
 	if err != nil {
 		return response.Result, err
 	}
@@ -394,7 +394,7 @@ func (c *Client) upsert(ctx context.Context, acct *Account) (result, error) {
 	return response.Result, err
 }
 
-func (c *Client) loggedIn(ctx context.Context) (bool, error) {
+func (c *Client) LoggedIn(ctx context.Context) (bool, error) {
 	if c.session == nil || c.session.Token == "" {
 		return false, nil
 	}

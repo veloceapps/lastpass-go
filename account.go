@@ -68,7 +68,7 @@ type chunk struct {
 //
 // If Client is not logged in, an *AuthenticationError is returned.
 func (c *Client) Accounts(ctx context.Context) ([]*Account, error) {
-	loggedIn, err := c.loggedIn(ctx)
+	loggedIn, err := c.LoggedIn(ctx)
 	if err != nil {
 		return nil, err
 	}
