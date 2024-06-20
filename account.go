@@ -37,11 +37,12 @@ type Account struct {
 }
 
 type encryptedAccount struct {
-	id              string
-	name            []byte
-	username        []byte
-	password        []byte
-	url             []byte
+	id       string
+	name     []byte
+	username []byte
+	password []byte
+	url      []byte
+
 	group           []byte
 	notes           []byte
 	lastModifiedGMT string
@@ -194,7 +195,7 @@ func parseAccount(r io.Reader) (*encryptedAccount, error) {
 	if err != nil {
 		return nil, err
 	}
-	urlHexEncoded, err := readItem(r)
+	urlHexEncodedOrEncrypted, err := readItem(r)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +239,7 @@ func parseAccount(r io.Reader) (*encryptedAccount, error) {
 		nameEncrypted,
 		usernameEncrypted,
 		passwordEncrypted,
-		urlHexEncoded,
+		urlHexEncodedOrEncrypted,
 		groupEncrypted,
 		notesEncrypted,
 		string(lastModifiedGMT),
@@ -259,7 +260,23 @@ func decryptAccount(encrypted *encryptedAccount, encryptionKey []byte) (*Account
 	if err != nil {
 		return nil, err
 	}
-	url, err := decodeHex(encrypted.url)
+	// check if encrypted.url is encrypted with AES
+	// if it is, decrypt it with the encryption key
+	// if it is not, decode it from hex
+
+	var url string
+	if bytes.HasPrefix(encrypted.url, []byte("!")) {
+		url, err = decryptItem(encrypted.url, encryptionKey)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		urlByte, err := decodeHex(encrypted.url)
+		if err != nil {
+			return nil, err
+		}
+		url = string(urlByte)
+	}
 	if err != nil {
 		return nil, err
 	}

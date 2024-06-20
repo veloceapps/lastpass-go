@@ -4,7 +4,6 @@ package lastpass
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -363,13 +362,18 @@ func (c *Client) upsert(ctx context.Context, acct *Account) (result, error) {
 		return response.Result, err
 	}
 
+	urlEncrypted, err := encryptAESCBC(acct.URL, key)
+	if err != nil {
+		return response.Result, err
+	}
+
 	data := url.Values{
 		"extjs":     []string{"1"},
 		"token":     []string{c.session.Token},
 		"method":    []string{"cli"},
 		"pwprotect": []string{"off"},
 		"aid":       []string{acct.ID},
-		"url":       []string{hex.EncodeToString([]byte(acct.URL))},
+		"url":       []string{urlEncrypted},
 		"name":      []string{nameEncrypted},
 		"grouping":  []string{groupEncrypted},
 		"username":  []string{userNameEncrypted},
