@@ -367,6 +367,15 @@ func (c *Client) upsert(ctx context.Context, acct *Account) (result, error) {
 		return response.Result, err
 	}
 
+	// LastPass renders the live TOTP code from this field when set.
+	// encryptAESCBC returns "" for an empty plaintext, which mirrors
+	// the empty `totp=` parameter LP itself sends from the web vault
+	// for entries without a one-time passcode.
+	totpEncrypted, err := encryptAESCBC(acct.TOTP, key)
+	if err != nil {
+		return response.Result, err
+	}
+
 	data := url.Values{
 		"extjs":     []string{"1"},
 		"token":     []string{c.session.Token},
@@ -379,6 +388,7 @@ func (c *Client) upsert(ctx context.Context, acct *Account) (result, error) {
 		"username":  []string{userNameEncrypted},
 		"password":  []string{passwordEncrypted},
 		"extra":     []string{notesEncrypted},
+		"totp":      []string{totpEncrypted},
 	}
 	if share.id != "" {
 		data.Set("sharedfolderid", share.id)

@@ -34,6 +34,12 @@ type Account struct {
 	// Timestamp in seconds (set by LastPass servers).
 	LastModifiedGMT string
 	LastTouch       string
+	// TOTP is the One-time passcode shared secret (base32 without
+	// padding, as accepted by RFC 6238 authenticator apps). When
+	// non-empty, LastPass renders the live TOTP code next to the
+	// entry in the web vault. Older ACCT records on the wire do not
+	// carry this field and round-trip as an empty string.
+	TOTP string
 }
 
 type encryptedAccount struct {
@@ -47,6 +53,7 @@ type encryptedAccount struct {
 	notes           []byte
 	lastModifiedGMT string
 	lastTouch       string
+	totp            []byte
 }
 
 // share represents a LastPass shared folder.
@@ -234,6 +241,28 @@ func parseAccount(r io.Reader) (*encryptedAccount, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Positions 32-38 are LP-internal fields we don't care about.
+	// Position 39 carries the encrypted TOTP shared secret (added by
+	// LastPass after this library's original field map was written).
+	// Older ACCT records on the wire stop short of position 39, so
+	// EOF mid-tail is treated as "no TOTP" rather than a parse error.
+	var totpEncrypted []byte
+	for i := 0; i < 7; i++ {
+		if err = skipItem(r); err != nil {
+			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+				err = nil
+				break
+			}
+			return nil, err
+		}
+	}
+	if err == nil {
+		if totpItem, terr := readItem(r); terr == nil {
+			totpEncrypted = totpItem
+		} else if !errors.Is(terr, io.EOF) && !errors.Is(terr, io.ErrUnexpectedEOF) {
+			return nil, terr
+		}
+	}
 	return &encryptedAccount{
 		string(id),
 		nameEncrypted,
@@ -244,6 +273,7 @@ func parseAccount(r io.Reader) (*encryptedAccount, error) {
 		notesEncrypted,
 		string(lastModifiedGMT),
 		string(lastTouch),
+		totpEncrypted,
 	}, nil
 }
 
@@ -288,6 +318,13 @@ func decryptAccount(encrypted *encryptedAccount, encryptionKey []byte) (*Account
 	if err != nil {
 		return nil, err
 	}
+	// TOTP is optional. Empty for records that pre-date the LP TOTP
+	// rollout and for entries where the user never set a one-time
+	// passcode; decryptItem already returns "" for empty input.
+	totp, err := decryptItem(encrypted.totp, encryptionKey)
+	if err != nil {
+		return nil, err
+	}
 	return &Account{
 		encrypted.id,
 		name,
@@ -299,6 +336,7 @@ func decryptAccount(encrypted *encryptedAccount, encryptionKey []byte) (*Account
 		notes,
 		encrypted.lastModifiedGMT,
 		encrypted.lastTouch,
+		totp,
 	}, nil
 }
 
