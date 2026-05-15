@@ -498,3 +498,22 @@ func (c *Client) getShare(ctx context.Context, shareName string) (share, error) 
 func (a *Account) isShared() bool {
 	return strings.HasPrefix(a.Share, "Shared-")
 }
+
+// ShareAccessible reports whether the shared folder shareName is visible
+// to the logged-in account (exists), and whether it is writable for this
+// user (not marked read-only). exists is false with a nil error when the
+// folder simply isn't shared with this account — callers use this to
+// fail fast before writing an entry that would have nowhere to go.
+func (c *Client) ShareAccessible(ctx context.Context, shareName string) (exists bool, writable bool, err error) {
+	s, err := c.getShare(ctx, shareName)
+	if err != nil {
+		// getShare returns a "shared folder %s not found" error when the
+		// folder isn't shared with this account; treat that as a clean
+		// "does not exist" rather than a hard failure.
+		if strings.Contains(err.Error(), "not found") {
+			return false, false, nil
+		}
+		return false, false, err
+	}
+	return true, !s.readOnly, nil
+}
