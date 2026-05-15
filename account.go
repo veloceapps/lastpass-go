@@ -40,6 +40,12 @@ type Account struct {
 	// entry in the web vault. Older ACCT records on the wire do not
 	// carry this field and round-trip as an empty string.
 	TOTP string
+	// DisableAutofill maps to the LastPass per-entry "Disable Autofill"
+	// advanced setting (the never_autofill flag in the vault blob).
+	// When true, the LP extension will not autofill or autosave this
+	// entry. Useful for shared entries whose TOTP would otherwise be
+	// injected onto a different user's login on the same domain.
+	DisableAutofill bool
 }
 
 type encryptedAccount struct {
@@ -54,6 +60,11 @@ type encryptedAccount struct {
 	lastModifiedGMT string
 	lastTouch       string
 	totp            []byte
+	// neverAutofill is the plaintext "0"/"1" flag at positional
+	// index 14. Not AES-encrypted (it's a boolean flag, like fav /
+	// pwprotect), so it's kept as the raw string and interpreted in
+	// decryptAccount.
+	neverAutofill string
 }
 
 // share represents a LastPass shared folder.
@@ -232,7 +243,18 @@ func parseAccount(r io.Reader) (*encryptedAccount, error) {
 	if err != nil {
 		return nil, err
 	}
-	for i := 0; i < 18; i++ {
+	// Positions 13-30 sit between last_touch (12) and last_modified_gmt
+	// (31). Index 13 is autologin, 14 is never_autofill (the per-entry
+	// "Disable Autofill" flag). We want 14, so skip 13, read 14, skip
+	// the remaining 15-30 (16 items).
+	if err = skipItem(r); err != nil { // 13: autologin
+		return nil, err
+	}
+	neverAutofill, err := readItem(r) // 14: never_autofill
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < 16; i++ { // 15-30
 		if err = skipItem(r); err != nil {
 			return nil, err
 		}
@@ -274,6 +296,7 @@ func parseAccount(r io.Reader) (*encryptedAccount, error) {
 		string(lastModifiedGMT),
 		string(lastTouch),
 		totpEncrypted,
+		string(neverAutofill),
 	}, nil
 }
 
@@ -337,6 +360,8 @@ func decryptAccount(encrypted *encryptedAccount, encryptionKey []byte) (*Account
 		encrypted.lastModifiedGMT,
 		encrypted.lastTouch,
 		totp,
+		// never_autofill is a plaintext "0"/"1" flag in the blob.
+		encrypted.neverAutofill == "1",
 	}, nil
 }
 
