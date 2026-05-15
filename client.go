@@ -393,6 +393,12 @@ func (c *Client) upsert(ctx context.Context, acct *Account) (result, error) {
 	if share.id != "" {
 		data.Set("sharedfolderid", share.id)
 	}
+	// LastPass only sends never_autofill when the box is ticked and
+	// omits it otherwise; mirror that exactly. The value is the literal
+	// string "on" (captured from the LP web vault save).
+	if acct.DisableAutofill {
+		data.Set("never_autofill", "on")
+	}
 
 	res, err := c.postForm(ctx, EndpointShowWebsite, data)
 	if err != nil {
